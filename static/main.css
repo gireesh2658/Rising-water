@@ -15,8 +15,6 @@ body.predict-page {
     background-repeat: no-repeat;
     color: #ffffff;
     min-height: 100vh;
-    display: flex;
-    align-items: flex-start;
 }
 
 .main-container {
