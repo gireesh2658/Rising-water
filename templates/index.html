@@ -104,7 +104,7 @@
                             <label for="temp">
                                 <span class="label-icon">🌡️</span> Temperature (°C)
                             </label>
-                            <input type="number" step="any" id="temp" name="temp" class="form-input" required placeholder="Example: 30">
+                            <input type="number" step="any" id="temp" name="temp" class="form-input" min="-10" max="60" required placeholder="Example: 30">
                         </div>
 
                         <!-- Input: Humidity -->
@@ -112,7 +112,7 @@
                             <label for="humidity">
                                 <span class="label-icon">💧</span> Humidity (%)
                             </label>
-                            <input type="number" step="any" id="humidity" name="humidity" class="form-input" required placeholder="Example: 75">
+                            <input type="number" step="any" id="humidity" name="humidity" class="form-input" min="0" max="100" required placeholder="Example: 75">
                         </div>
 
                         <!-- Input: Cloud Cover -->
@@ -120,7 +120,7 @@
                             <label for="cloud_cover">
                                 <span class="label-icon">☁️</span> Cloud Cover (%)
                             </label>
-                            <input type="number" step="any" id="cloud_cover" name="cloud_cover" class="form-input" required placeholder="Example: 40">
+                            <input type="number" step="any" id="cloud_cover" name="cloud_cover" class="form-input" min="0" max="100" required placeholder="Example: 40">
                         </div>
 
                         <!-- Input: Annual Rainfall -->
@@ -128,7 +128,7 @@
                             <label for="annual">
                                 <span class="label-icon">🌧️</span> Annual Rainfall (mm)
                             </label>
-                            <input type="number" step="any" id="annual" name="annual" class="form-input" required placeholder="Example: 3200">
+                            <input type="number" step="any" id="annual" name="annual" class="form-input" min="0" max="20000" required placeholder="Example: 3200">
                         </div>
 
                         <!-- Input: Jan-Feb -->
@@ -136,7 +136,7 @@
                             <label for="jan_feb">
                                 <span class="label-icon">❄️</span> Jan-Feb Rainfall (mm)
                             </label>
-                            <input type="number" step="any" id="jan_feb" name="jan_feb" class="form-input" required placeholder="Example: 9.5">
+                            <input type="number" step="any" id="jan_feb" name="jan_feb" class="form-input" min="0" max="20000" required placeholder="Example: 9.5">
                         </div>
 
                         <!-- Input: Mar-May -->
@@ -144,7 +144,7 @@
                             <label for="mar_may">
                                 <span class="label-icon">🌸</span> Mar-May Rainfall (mm)
                             </label>
-                            <input type="number" step="any" id="mar_may" name="mar_may" class="form-input" required placeholder="Example: 350.2">
+                            <input type="number" step="any" id="mar_may" name="mar_may" class="form-input" min="0" max="20000" required placeholder="Example: 350.2">
                         </div>
 
                         <!-- Input: Jun-Sep -->
@@ -152,7 +152,7 @@
                             <label for="jun_sep">
                                 <span class="label-icon">☀️</span> Jun-Sep Rainfall (mm)
                             </label>
-                            <input type="number" step="any" id="jun_sep" name="jun_sep" class="form-input" required placeholder="Example: 2300">
+                            <input type="number" step="any" id="jun_sep" name="jun_sep" class="form-input" min="0" max="20000" required placeholder="Example: 2300">
                         </div>
 
                         <!-- Input: Oct-Dec -->
@@ -160,7 +160,7 @@
                             <label for="oct_dec">
                                 <span class="label-icon">🍂</span> Oct-Dec Rainfall (mm)
                             </label>
-                            <input type="number" step="any" id="oct_dec" name="oct_dec" class="form-input" required placeholder="Example: 250">
+                            <input type="number" step="any" id="oct_dec" name="oct_dec" class="form-input" min="0" max="20000" required placeholder="Example: 250">
                         </div>
                     </div>
 

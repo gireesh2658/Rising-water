@@ -12,3 +12,8 @@ class APIPerformanceTest(HttpUser):
     def test_home_page(self):
         """Test the rendering of the public home page."""
         self.client.get("/")
+
+    @task(2)
+    def test_history_page(self):
+        """Test the history endpoint (requires auth, will test redirect behavior)."""
+        self.client.get("/history")

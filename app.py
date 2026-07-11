@@ -22,9 +22,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.environ.get(
-    'FLASK_SECRET_KEY',
-    'dev-secret-key-super-secure')
+secret_key = os.environ.get('FLASK_SECRET_KEY')
+if not secret_key:
+    raise RuntimeError(
+        "CRITICAL ERROR: FLASK_SECRET_KEY is not set in the environment variables. "
+        "Set it in your .env file or export it before running the app."
+    )
+app.secret_key = secret_key
 CORS(app)
 
 logging.basicConfig(
@@ -62,16 +66,6 @@ class User(db.Model):
     
     weather_data = db.relationship('WeatherData', backref='user', lazy=True)
 
-class MLModel(db.Model):
-    __tablename__ = 'ml_models'
-    ModelID = db.Column(db.Integer, primary_key=True)
-    ModelName = db.Column(db.String(100), nullable=False)
-    AlgorithmType = db.Column(db.String(100), nullable=False)
-    Accuracy = db.Column(db.Float, nullable=True)
-    ModelFile = db.Column(db.String(255), nullable=False)
-    
-    predictions = db.relationship('PredictionResult', backref='model', lazy=True)
-
 class WeatherData(db.Model):
     __tablename__ = 'weather_data'
     DataID = db.Column(db.Integer, primary_key=True)
@@ -88,13 +82,18 @@ class PredictionResult(db.Model):
     __tablename__ = 'prediction_results'
     PredictionID = db.Column(db.Integer, primary_key=True)
     DataID = db.Column(db.Integer, db.ForeignKey('weather_data.DataID'), nullable=False)
-    ModelID = db.Column(db.Integer, db.ForeignKey('ml_models.ModelID'), nullable=True)
     FloodResult = db.Column(db.String(50), nullable=False)
     FloodProbability = db.Column(db.Float, nullable=False)
     PredictionDate = db.Column(db.DateTime, nullable=False, default=datetime.now)
 
 # Create tables
 with app.app_context():
+    try:
+        db.session.execute(db.text('SELECT 1'))
+        logging.info("Database connection verified successfully.")
+    except Exception as e:
+        logging.critical("Database connection failed: %s", e)
+        raise SystemExit("CRITICAL: Cannot connect to database. Check SQLALCHEMY_DATABASE_URI.")
     db.create_all()
     logging.info("Database tables verified/created successfully.")
 
@@ -151,6 +150,11 @@ def get_prediction_history():
     return history
 
 
+def user_cache_key():
+    """Generate a cache key scoped to the current user's session."""
+    return f"history_user_{session.get('user_id', 'anon')}"
+
+
 # ==============================================================================
 # Model Loading
 # ==============================================================================
@@ -163,9 +167,20 @@ def load_models():
     """Load the trained ML model, scaler, and feature names from disk."""
     global model, preprocessor, feature_names
     try:
-        model_path = os.path.join(MODELS_DIR, 'flood_model.pkl')
-        scaler_path = os.path.join(MODELS_DIR, 'preprocessor.pkl')
+        model_path = os.path.join(MODELS_DIR, 'floods.save')
+        scaler_path = os.path.join(MODELS_DIR, 'transform.save')
         features_path = os.path.join(MODELS_DIR, 'feature_names.pkl')
+
+        for path, name in [
+            (model_path, 'floods.save'),
+            (scaler_path, 'transform.save'),
+            (features_path, 'feature_names.pkl')
+        ]:
+            if not os.path.isfile(path):
+                raise FileNotFoundError(
+                    f"Required model artifact '{name}' not found at '{path}'. "
+                    "Run train.py to generate model artifacts before starting the app."
+                )
 
         model = joblib.load(model_path)
         preprocessor = joblib.load(scaler_path)
@@ -261,7 +276,7 @@ def reports():
 
 @app.route('/history')
 @login_required
-@cache.cached(timeout=60)
+@cache.cached(timeout=60, key_prefix=user_cache_key)
 def history():
     """Renders the prediction history page."""
     records = get_prediction_history()
@@ -291,10 +306,9 @@ def serve_report_image(filename):
 # Routes - API
 # ==============================================================================
 @app.route('/predict', methods=['POST'])
+@login_required
 def predict():
     """API endpoint for predicting flood risk."""
-    if 'user_id' not in session:
-        return jsonify({"error": "Unauthorized. Please log in."}), 401
 
     if model is None or preprocessor is None:
         return jsonify(
@@ -305,6 +319,11 @@ def predict():
         if not data:
             return jsonify(
                 {"error": "Invalid request. JSON body missing."}), 400
+
+        # Sanitize: strip whitespace from any string values before processing
+        for field in data:
+            if isinstance(data[field], str):
+                data[field] = data[field].strip()
 
         # 1. Extract Raw Inputs
         required_fields = [
@@ -340,10 +359,10 @@ def predict():
             jun_sep = float(data['jun_sep'])
             oct_dec = float(data['oct_dec'])
 
-            if any(val < 0 for val in [
+            if any(val < 0 or val > 20000 for val in [
                    annual, jan_feb, mar_may, jun_sep, oct_dec]):
                 raise ValueError(
-                    "Rainfall values must be non-negative.")
+                    "Rainfall values must be between 0 and 20000 mm.")
 
         except ValueError as ve:
             return jsonify({"error": str(ve)}), 400
@@ -413,6 +432,7 @@ def predict():
             'jun_sep': jun_sep, 'oct_dec': oct_dec
         }
         save_prediction(raw_inputs, response)
+        cache.delete(user_cache_key())
 
         return jsonify(response), 200
 
@@ -423,6 +443,7 @@ def predict():
 
 
 @app.route('/api/history', methods=['GET'])
+@login_required
 def api_history():
     """API endpoint to retrieve prediction history as JSON."""
     records = get_prediction_history()
@@ -430,15 +451,26 @@ def api_history():
 
 
 @app.route('/api/history/clear', methods=['POST'])
+@login_required
 def clear_history():
-    """API endpoint to clear all prediction history."""
+    """API endpoint to clear prediction history for the current user."""
     try:
-        PredictionResult.query.delete()
-        WeatherData.query.delete()
+        user_id = session['user_id']
+        # Delete PredictionResults first (FK dependency on WeatherData)
+        user_weather_ids = db.session.query(WeatherData.DataID).filter(
+            WeatherData.UserID == user_id
+        ).subquery()
+        PredictionResult.query.filter(
+            PredictionResult.DataID.in_(user_weather_ids)
+        ).delete(synchronize_session='fetch')
+        # Then delete the user's WeatherData records
+        WeatherData.query.filter(WeatherData.UserID == user_id).delete()
         db.session.commit()
+        cache.delete(user_cache_key())
         return jsonify({"message": "History cleared successfully."}), 200
     except Exception as e:
         db.session.rollback()
+        logging.error("Failed to clear history for user %s: %s", session.get('user_id'), e)
         return jsonify({"error": str(e)}), 500
 
 
